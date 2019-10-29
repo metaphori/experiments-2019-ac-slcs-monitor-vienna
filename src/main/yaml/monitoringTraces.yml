@@ -1,0 +1,178 @@
+variables:
+  random: &random
+    min: 0
+    max: 49
+    step: 1
+    default: 0
+  connectionType: &connectionType
+    formula: "\"ConnectWithinDistance\""
+    language: kotlin
+  range: &range
+    formula: 500
+  moveFrequency: &moveFrequency
+    min: 0.1
+    max: 0.3
+    step: 0.1
+    default: 0.1
+  nodeMonitoringPredicate: &nodeMonitoringPredicate
+    formula: "\"{ it%3==0 }\""
+  retentionTime: &retentionTime
+    formula: 5 #Math.min(30.0, 50.0)
+  peopleCount: &peopleCount
+    formula: 1497
+  accessPointCount: &accessPointCount
+    formula: 0
+  firingFrequency: &firingFrequency
+    min: 0.1
+    max: 0.3
+    step: 0.15
+    default: 0.25
+  netDiameter: &netDiameter
+    min: 5000
+    max: 25000
+    step: 5000
+    default: 25000
+  infoSpeed: &infoSpeed
+    #formula: infoSpeedK * range / firingFrequency
+    min: 900.0
+    max: 1800.0
+    step: 600.0
+    default: 1500.0
+  accessPointId: &accessPointId
+    formula: "\"accessPoint\""
+  rangeId: &rangeId
+    formula: "\"range\""
+  roleId: &roleId
+    formula: "\"role\""
+  dangerousMolName: &dangerousMolName
+    formula: "\"dangerous\""
+  safeMolName: &safeMolName
+    formula: "\"isSafePlace\""
+
+export:
+- time
+- molecule: run # nodes that have run the program
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: risk # nodes at risk
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: overcrowded # nodes in overcrowded areas
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: warning # nodes nearby risk nodes should be warned
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: monitored # number of nodes that are monitored
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: monitoring
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: monitoringOracle
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: monitoringDifference
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: monitoringDifferenceWithDelay
+  aggregators: [sum]
+  value-filter: onlyfinite
+
+seeds:
+  scenario: *random
+  simulation: *random
+
+incarnation: protelis
+
+ReproduceGPSTrace: &ReproduceGPSTrace
+  type: ReproduceGPSTrace
+  parameters: ["vcmuser.gpx", false, AlignToTime, 1365922800, false, false]
+  # (1) path to file with GPS traces,
+  # (2) bool saying if traces have to be distributed cyclically,
+  # (3,...) class that implement the strategy to normalize the time + corresponding args
+
+ReproduceGPSTraceOnStreets: &ReproduceGPSTraceOnStreets
+  type: GPSTraceWalker
+  parameters: ["vcmuser.gpx", false, AlignToTime, 1365922800, false, false]
+
+environment:
+  type: OSMEnvironment
+  parameters: ["vcm.pbf", true, true]
+  # Args: file, onstreets (if true, nodes are places on nearest street)
+  # Possibly, a third, boolean arg can be provided: onlyOnStreets---
+  # if true, the nodes which are too far from a street will be simply discarded.
+  # If false, they will be placed anyway, in the original position.
+
+network-model:
+  type: *connectionType
+  parameters: [*range]
+
+pools:
+- pool: &program
+  - time-distribution: *firingFrequency
+    type: Event
+    actions:
+    - type: RunProtelisProgram
+      parameters: ["monitoringTraces", *retentionTime]
+  - program: send
+- pool: &moveWithTraces
+  - time-distribution: *moveFrequency
+    type: Event
+    actions:
+    - *ReproduceGPSTraceOnStreets # *ReproduceGPSTrace
+
+layers:
+  - type: UniformLayer
+    molecule: dangerousMolName
+    parameters: [*dangerousMolName]
+  - type: UniformLayer
+    molecule: safeMolName
+    parameters: [*safeMolName]
+
+displacements:
+# PEOPLE
+- in:
+    type: FromGPSTrace
+    parameters: [*peopleCount, "vcmuser.gpx", false, AlignToTime, 1365922800, false, false]
+  programs:
+  - *moveWithTraces
+  - *program
+  contents:
+  - molecule: *rangeId
+    concentration: *range
+  - molecule: *accessPointId
+    concentration: false
+  - molecule: *roleId
+    concentration: 0
+  - molecule: nodeMonitoringPredicate
+    concentration: *nodeMonitoringPredicate
+  - molecule: infoSpeed
+    concentration: *infoSpeed
+  - molecule: netDiameter
+    concentration: *netDiameter
+# SAFE ZONES
+- in:
+    type: SpecificPositions #hospitals
+    parameters: [[48.2152226, 16.3816613],
+                 [48.2366507, 16.3838339],
+                 [48.2146077, 16.3485146],
+                 [48.2055562, 16.3778687],
+                 [48.1924837, 16.3458967],
+                 [48.1879776, 16.3616896],
+                 [48.1728973, 16.3443303]]
+  programs:
+    - *program
+  contents:
+  - molecule: *rangeId
+    concentration: *range
+  - molecule: *accessPointId
+    concentration: false
+  - molecule: *roleId
+    concentration: 2
+  - molecule: nodeMonitoringPredicate
+    concentration: *nodeMonitoringPredicate
+  - molecule: infoSpeed
+    concentration: *infoSpeed
+  - molecule: netDiameter
+    concentration: *netDiameter

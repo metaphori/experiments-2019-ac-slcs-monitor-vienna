@@ -1,0 +1,91 @@
+module minimalMonitoringTraces
+
+import java.lang.Math.*
+import java.lang.Double.isFinite
+import Overcrowding.*
+import it.unibo.SimulationUtils.*
+import protelis:coord:accumulation
+import protelis:coord:sparsechoice
+import protelis:state:time
+import protelis:coord:meta
+import protelis:coord:spreading
+import protelis:lang:utils
+import protelis:state:nonselfstabilizing:time
+import it.unibo.protelisFunctions.ProtelisFunctions.* // for out.println(...)
+import java.lang.System.out
+
+
+/*********** monitoring functions ***********/
+
+def somewhere(formula){
+    let netDiameter = 1100; // env.get("diameter")
+    let speed = 500;
+    bisGradient(formula, env.get("range"), speed) < netDiameter
+}
+
+def roundsince(cond) {
+    rep (x <- 0) { mux (cond) { 0 } else { x + 1 } }
+}
+
+/********** SLCS (spatial logic for closure space) mappings to FC *******/
+
+def interior(f){ // square: true at points with all nbrs satisfying f
+    all(nbr(f))
+}
+
+def closure(f){ // diamond: true at points with some nbrs satisfying f
+	any(nbr(f))
+}
+
+def reaches(f1,f2) { // R: true at starting points of paths whose ending point satisfies f2 and where f1 holds
+	if(f1){ somewhere(f2) } else { false }
+}
+
+def surroundedBy(f1,f2){ // U: true at points in an area satisfying f1 whose neighbours satisfy f2
+	f1 && interior(!reaches(!f2,!f1))
+	// The following is maybe more intuitive: // !reaches(f1, closure(!f1 && !f2))
+}
+
+def implies(f1,f2) {
+	f1 <= f2
+}
+
+let id = self.getDeviceUID().toString(); // getDeviceUID() returns an object of type DeviceUID
+let idInt = parseInt(id);
+let delay = 30;
+
+let dangerousMolName = env.get("dangerousMolName");
+let safeMolName = env.get("safeMolName");
+
+let dangerous = env.get("dangerous")>0; env.put(dangerousMolName, dangerous);
+let isSafePlace = env.get("safe")>0; env.put(safeMolName, isSafePlace);
+
+/*
+// The following check allowed me to find a problem in "reaches" or, in particolar, in "somewhere", esp. in the parameters in bisGradient (gradient value did not raise with enough speed)
+let cc = closure(!dangerous && !reaches(!dangerous, isSafePlace)); env.put("cc",cc);
+let p = if(dangerous){
+let bg = bisGradient(cc, env.get("range"), 200);
+env.put("bg",bg);
+bg<1100
+} else { false};
+env.put("p",p);
+
+// The following was to inspect whether individual parts of the monitor worked correctly
+// surroundedBy(dangerous,reaches(!dangerous, isSafePlace))
+// Proprietà vera nella zona di pericolo se tutti i nodi vicini alla zona di pericolo (eccetto quelli non in pericolo che raggiungono zone safe) non raggiungono nodi non in pericolo.
+// Ovvero se tutti i vicini alla zona di pericolo tranne quelli per cui la proprietà è ok sono nodi interni alla zona, cioè non raggiungono i nodi non in pericolo fuori dal bordo
+let safetyReachability = reaches(!dangerous, isSafePlace); env.put("safetyReachability", safetyReachability);
+let surroundedSR = surroundedBy(dangerous,reaches(!dangerous, isSafePlace)); env.put("surroundedSR", surroundedSR);
+*/
+
+let monitoring = implies(dangerous, surroundedBy(dangerous, reaches(!dangerous, isSafePlace)));
+env.put("monitoring", monitoring);
+let monitoringOracle = monitoringPropertySatisfied(self.getEnvironmentAccess(), idInt);
+env.put("monitoringOracle", monitoringOracle);
+
+if(dangerous){
+    let monitoringDifference = monitoring != monitoringOracle;
+    env.put("monitoringDifference", monitoringDifference);
+    env.put("monitoringDifferenceWithDelay", roundsince(!monitoringDifference) < delay);
+    monitoring
+} else { false }

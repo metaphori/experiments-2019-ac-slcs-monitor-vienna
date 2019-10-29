@@ -1,0 +1,359 @@
+variables:
+  random: &random
+    min: 10
+    max: 49
+    step: 1
+    default: 1
+  optimise: &optimise
+    min: 0
+    max: 1
+    step: 1
+    default: 1
+  moveFrequency: &moveFrequency
+    min: 0.05
+    max: 0.2
+    step: 0.05
+    default: 0.1
+  dispersalMoveFrequency: &dispersalMoveFrequency
+    min: 0.01
+    max: 0.02
+    step: 0.005
+    default: 0.1
+  nodeMonitoringPredicate: &nodeMonitoringPredicate
+    formula: "\"{ it%3==0 }\""
+  connectionType: &connectionType
+    formula: "\"CustomConnectViaAccessPoint\""
+    language: kotlin
+  range: &range
+    min: 100.0
+    max: 150
+    step: 50.0
+    default: 100.0
+  accessPointRange: &accessPointRange
+    min: 300.0
+    max: 600
+    step: 100.0
+    default: 500.0
+  peopleCount: &peopleCount
+    formula: 1497
+  accessPointCount: &accessPointCount
+    min: 3000
+    max: 10000
+    step: 2000
+    default: 300
+  firingFrequency: &firingFrequency
+    min: 0.1
+    max: 0.3
+    step: 0.15
+    default: 1 # 0.25
+  retentionTime: &retentionTime
+    formula: 1/firingFrequency
+    #min: 8.0
+    #max: 17
+    #step: 8
+    #default: 7.0
+  gradientToUse: &gradientToUse
+    min: 0  # bisGradient
+    max: 1  # hopGradient
+    step: 1
+    default: 1
+  netDiameter: &netDiameter
+    min: 10000
+    max: 30000
+    step: 5000
+    default: 25000
+  netDiameterHops: &netDiameterHops
+    min: 20
+    max: 30
+    step: 5
+    default: 25
+  infoSpeed: &infoSpeed
+    min: 800.0
+    max: 1500.0
+    step: 300.0
+    default: 500.0
+  apStep: &apStep
+    min: 0.0035
+    max: 0.0055
+    step: 0.0005
+    default: 0.0035
+  apRand: &apRand
+    formula: 0.001
+  pFollows: &pFollows
+    min: 0
+    max: 1
+    step: 1
+    default: 0.8
+  startDispersalAt: &startDispersalAt
+    formula: 250.0
+  endDispersalAt: &endDispersalAt
+    formula: 500.0
+  accessPointName: &accessPointMoleculeName
+    formula: "\"accessPoint\""
+  rangeId: &rangeId
+    formula: "\"range\""
+  roleId: &roleId
+    formula: "\"role\""
+  dangerousMolName: &dangerousMolName
+    formula: "\"dangerous\""
+  safeMolName: &safeMolName
+    formula: "\"isSafePlace\""
+
+export:
+  - time
+  - molecule: run # nodes that have run the program
+    aggregators: [sum]
+    value-filter: onlyfinite
+  - molecule: risk # nodes at risk
+    aggregators: [sum]
+    value-filter: onlyfinite
+  - molecule: overcrowded # nodes in overcrowded areas
+    aggregators: [sum]
+    value-filter: onlyfinite
+  - molecule: warning # nodes nearby risk nodes should be warned
+    aggregators: [sum]
+    value-filter: onlyfinite
+  - molecule: monitored # number of nodes that are monitored
+    aggregators: [sum]
+    value-filter: onlyfinite
+  - molecule: monitoring
+    aggregators: [sum]
+    value-filter: onlyfinite
+  - molecule: monitoringOracle
+    aggregators: [sum]
+    value-filter: onlyfinite
+  - molecule: monitoringDifference
+    aggregators: [sum]
+    value-filter: onlyfinite
+  - molecule: falsepositive
+    aggregators: [sum]
+    value-filter: onlyfinite
+  - molecule: falsenegative
+    aggregators: [sum]
+    value-filter: onlyfinite
+  - molecule: following
+    aggregators: [sum]
+    value-filter: onlyfinite
+  - molecule: numNbrsDelta
+    aggregators: [sum]
+    value-filter: onlyfinite
+  - molecule: differentCount
+    aggregators: [sum]
+    value-filter: onlyfinite
+
+seeds:
+  scenario: *random
+  simulation: *random
+
+incarnation: protelis
+
+ReproduceGPSTrace: &ReproduceGPSTrace
+  type: ReproduceGPSTrace
+  parameters: ["vcmuser.gpx", false, AlignToTime, 1365922800, false, false]
+  # (1) path to file with GPS traces,
+  # (2) bool saying if traces have to be distributed cyclically,
+  # (3,...) class that implement the strategy to normalize the time + corresponding args
+
+ReproduceGPSTraceOnStreets: &ReproduceGPSTraceOnStreets
+  type: GPSTraceWalker
+  parameters: ["vcmuser.gpx", false, AlignToTime, 1365922800, false, false]
+
+environment:
+  type: OSMEnvironment
+  parameters: ["vcm.pbf", true, true]
+  # Args: file, onstreets (if true, nodes are places on nearest street)
+  # Possibly, a third, boolean arg can be provided: onlyOnStreets---
+  # if true, the nodes which are too far from a street will be simply discarded.
+  # If false, they will be placed anyway, in the original position.
+
+network-model:
+  type: *connectionType
+  parameters: [*range, *accessPointRange, *accessPointMoleculeName]
+
+pools:
+- pool: &program
+  - time-distribution: *firingFrequency
+    type: Event
+    actions:
+    - type: RunProtelisProgram
+      parameters: ["monitoringAndDispersal", *retentionTime]
+  - program: send
+- pool: &move
+  - time-distribution: *moveFrequency
+    type: Event
+    conditions:
+      - type: MoleculeHasConcentration
+        parameters: [following, false]
+    actions:
+      - *ReproduceGPSTraceOnStreets # *ReproduceGPSTrace
+  - time-distribution: *dispersalMoveFrequency # { type: ExponentialTime, parameters: [*dispersalMoveFrequency] }
+    type: Event
+    conditions:
+      - type: MoleculeHasConcentration
+        parameters: [following, true]
+    actions:
+      - type: TargetWalker
+        parameters: [goto, none]
+
+layers:
+  - type: UniformLayer
+    molecule: dangerousMolName
+    parameters: [*dangerousMolName]
+  - type: UniformLayer
+    molecule: safeMolName
+    parameters: [*safeMolName]
+
+displacements:
+  # ACCESS POINTS
+  - in: # UPPER PART
+      type: Grid
+      parameters: [48.2127, 16.340, 48.2270, 16.4030, *apStep, *apStep, *apRand, *apRand, 0.001, 0.001]
+      # LARGE: 48.1503226, 16.3071817, 48.2813408, 16.452524514
+      # SMALL: 48.177, 16.305, 48.245, 16.437
+      # xstart, ystart, xend, yend, stepx= 0.0045, stepy=0.0045, xrand=0.001, yrand=0.001, xshift=0.001, yshift=0.001
+      #type: GeometricGradientRectangle
+      #parameters: [1000, 48.1923226, 16.33818, 0.00345, 0.00706, 0.8, false, false]
+      # xstart, ystart, xend, yend, xstep, ystep, xrand, yrand, xshift, yshift
+      #type: CloseToGPSTrace
+      #parameters: [*accessPointCount, 1e-5, 0, 60, 2400, "vcmuser.gpx", AlignToTime, 1365922800, false, false]
+      # nodeCount, variance, fromTime, interval, toTime, gpsFilePath, normalizerClass+args
+    programs:
+      - *program
+    contents:
+      - molecule: *rangeId
+        concentration: *range
+      - molecule: *roleId
+        concentration: 1
+      - molecule: nodeMonitoringPredicate
+        concentration: *nodeMonitoringPredicate
+      - molecule: infoSpeed
+        concentration: *infoSpeed
+      - molecule: netDiameter
+        concentration: *netDiameter
+      - molecule: netDiameterHops
+        concentration: *netDiameterHops
+      - molecule: *accessPointMoleculeName
+        concentration: 1
+      - molecule: gradientToUse
+        concentration: *gradientToUse
+      - molecule: dispersalTimeframe
+        concentration: [*startDispersalAt,*endDispersalAt]
+      - molecule: optimise
+        concentration: *optimise
+  - in: # SOUTH PART
+      type: Grid
+      parameters: [48.182, 16.308, 48.2125, 16.423, *apStep, *apStep, *apRand, *apRand, 0.001, 0.001]
+    programs:
+      - *program
+    contents:
+      - molecule: *rangeId
+        concentration: *range
+      - molecule: *roleId
+        concentration: 1
+      - molecule: nodeMonitoringPredicate
+        concentration: *nodeMonitoringPredicate
+      - molecule: infoSpeed
+        concentration: *infoSpeed
+      - molecule: netDiameter
+        concentration: *netDiameter
+      - molecule: netDiameterHops
+        concentration: *netDiameterHops
+      - molecule: *accessPointMoleculeName
+        concentration: 1
+      - molecule: gradientToUse
+        concentration: *gradientToUse
+      - molecule: dispersalTimeframe
+        concentration: [*startDispersalAt,*endDispersalAt]
+      - molecule: optimise
+        concentration: *optimise
+  - in: # ABOVE BRIDGE PART
+      type: Grid
+      parameters: [48.21960, 16.403, 48.2380, 16.432, *apStep, *apStep, *apRand, *apRand, 0.001, 0.001]
+    programs:
+      - *program
+    contents:
+      - molecule: *rangeId
+        concentration: *range
+      - molecule: *roleId
+        concentration: 1
+      - molecule: nodeMonitoringPredicate
+        concentration: *nodeMonitoringPredicate
+      - molecule: infoSpeed
+        concentration: *infoSpeed
+      - molecule: netDiameter
+        concentration: *netDiameter
+      - molecule: netDiameterHops
+        concentration: *netDiameterHops
+      - molecule: *accessPointMoleculeName
+        concentration: 1
+      - molecule: gradientToUse
+        concentration: *gradientToUse
+      - molecule: dispersalTimeframe
+        concentration: [*startDispersalAt,*endDispersalAt]
+      - molecule: optimise
+        concentration: *optimise
+  # PEOPLE
+  - in:
+      type: FromGPSTrace
+      parameters: [*peopleCount, "vcmuser.gpx", false, AlignToTime, 1365922800, false, false]
+    programs:
+    - *move
+    - *program
+    contents:
+    - molecule: *rangeId
+      concentration: *range
+    - molecule: *accessPointMoleculeName
+      concentration: 0
+    - molecule: *roleId
+      concentration: 0
+    - molecule: nodeMonitoringPredicate
+      concentration: *nodeMonitoringPredicate
+    - molecule: infoSpeed
+      concentration: *infoSpeed
+    - molecule: netDiameter
+      concentration: *netDiameter
+    - molecule: netDiameterHops
+      concentration: *netDiameterHops
+    - molecule: pFollows
+      concentration: *pFollows
+    - molecule: follows-advice
+      concentration: self.nextRandomDouble()
+    - molecule: gradientToUse
+      concentration: *gradientToUse
+    - molecule: dispersalTimeframe
+      concentration: [*startDispersalAt,*endDispersalAt]
+    - molecule: startDispersalOffset
+      concentration: self.nextRandomDouble()*50
+    - molecule: optimise
+      concentration: *optimise
+  # SAFE ZONES
+  - in:
+      type: SpecificPositions #hospitals
+      parameters: [[48.2152226, 16.3816613],
+                   [48.2146077, 16.3485146],
+                   [48.2055562, 16.3778687],
+                   [48.1924837, 16.3458967],
+                   [48.1879776, 16.3616896]] # too south: [48.1728973, 16.3443303], too north: [48.2366507, 16.3838339]
+    programs:
+      - *program
+    contents:
+    - molecule: *rangeId
+      concentration: *range
+    - molecule: *accessPointMoleculeName
+      concentration: 1
+    - molecule: *roleId
+      concentration: 2
+    - molecule: nodeMonitoringPredicate
+      concentration: *nodeMonitoringPredicate
+    - molecule: infoSpeed
+      concentration: *infoSpeed
+    - molecule: netDiameter
+      concentration: *netDiameter
+    - molecule: netDiameterHops
+      concentration: *netDiameterHops
+    - molecule: gradientToUse
+      concentration: *gradientToUse
+    - molecule: dispersalTimeframe
+      concentration: [*startDispersalAt,*endDispersalAt]
+    - molecule: optimise
+      concentration: *optimise

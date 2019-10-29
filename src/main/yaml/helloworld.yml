@@ -1,0 +1,61 @@
+variables:
+  random: &random
+    min: 0
+    max: 29
+    step: 1
+    default: 2
+#  connectionType: &connectionType
+#    formula: ConnectWithinDistance # Does not work:
+  range: &range
+    formula: 350.0
+    language: scala
+  moveFrequency: &moveFrequency
+    formula: 1.0/2
+    language: scala
+
+export:
+  - time
+
+seeds:
+  scenario: *random
+  simulation: *random
+  
+incarnation: scafi
+
+ReproduceGPSTrace: &ReproduceGPSTrace
+  type: ReproduceGPSTrace
+  parameters: ["vcmuser.gpx", false, AlignToTime, 1365922800, false, false]
+
+environment:
+  type: OSMEnvironment
+  parameters: ["vcm.pbf", false]
+
+network-model:
+  type: ConnectWithinDistance #*connectionType
+  parameters: [*range]
+
+pools:
+  - pool: &program
+    - time-distribution:
+        type: ExponentialTime
+        parameters: [1]
+      type: Event
+      actions:
+        - type: RunScafiProgram
+          parameters: [it.unibo.casestudy.HelloWorld, 20]
+  - pool: &moveWithTraces
+    - time-distribution: *moveFrequency
+      type: Event
+      actions:
+      - *ReproduceGPSTrace
+
+displacements:
+- in:
+    type: FromGPSTrace
+    parameters: [1497, "vcmuser.gpx", false, AlignToTime, 1365922800, false, false]
+  programs:
+  - *moveWithTraces
+  - *program
+  contents:
+  - molecule: test
+    concentration: true

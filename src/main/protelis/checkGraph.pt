@@ -1,0 +1,26 @@
+module monitoringAndDispersal
+
+import it.unibo.SimulationUtils.*
+import java.lang.System.out
+import it.unibo.protelisFunctions.ProtelisFunctions.*
+import protelis:lang:utils
+import protelis:coord:spreading
+
+def countNearby(range) {
+	let human = rep(h <- env.get("role")==0) { h };
+	foldSum(mux(human && nbrRange() < range) { 1 } else { 0 })
+}
+
+let role = env.get("role");
+let id = self.getDeviceUID().toString();
+let idInt = parseInt(id);
+env.put("devId", idInt);
+let c = countNearby(env.get("range")) >= 4;
+env.put("dangerous", c);
+
+let pos = getPos(self.getEnvironmentAccess(), idInt); // Euclidean2DPosition
+env.put("goto", [pos.getX()+self.nextRandomDouble()-0.5,pos.getY()+self.nextRandomDouble()-0.5])
+
+checkGraph(self.getEnvironmentAccess(), idInt);
+
+true

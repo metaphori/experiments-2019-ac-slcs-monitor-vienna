@@ -1,0 +1,167 @@
+module monitoringTraces
+
+import java.lang.Math.*
+import java.lang.Double.isFinite
+import Overcrowding.*
+import it.unibo.SimulationUtils.*
+import protelis:coord:accumulation
+import protelis:coord:sparsechoice
+import protelis:state:time
+import protelis:coord:meta
+import protelis:coord:spreading
+import protelis:lang:utils
+import protelis:state:nonselfstabilizing:time
+import it.unibo.protelisFunctions.ProtelisFunctions.* // for out.println(...)
+import java.lang.System.out
+
+def countNearby(range) {
+	let human = rep(h <- env.get("role")==0) { h };
+	foldSum(mux(human && nbrRange() < range) { 1 } else { 0 })
+}
+
+def densityEstimation(p, range, w) {
+	countNearby(range) / (p * PI * range ^ 2 * w)
+}
+
+def dangerousDensity(p, range, dangerousDensity, groupSize, w) {
+	let partition = S(range, nbrRange);
+	let localDensity = densityEstimation(p, range, w);
+	let avg = summarize(partition, sum, localDensity, 0) / summarize(partition, sum, 1, 0);
+	let count = summarize(partition, sum, 1 / p, 0);
+	avg > dangerousDensity && count > groupSize
+}
+
+def crowdTracking(p, range, w, crowdedDensity, dangerousThreshold, groupSize, timeFrame) {
+	let densityEst = densityEstimation(p, range, w)
+	env.put("densityEst", densityEst)
+	if (isRecentEvent(densityEst > crowdedDensity, timeFrame)) {
+		if (dangerousDensity(p, range, dangerousThreshold, groupSize, w)) {
+			overcrowded()
+		} else { atRisk() }
+	} else { none() }
+}
+
+def vectorFrom(target) {
+	let xy = 2 * self.getCoordinates() - broadcast(target, self.getCoordinates());
+	let lat = xy.get(1);
+	let long = xy.get(1);
+	if (isFinite(lat) && isFinite(long)) {
+		[xy.get(1), xy.get(0)]
+	} else {
+		noAdvice()
+	}
+}
+
+def noAdvice() { [NaN, NaN] }
+
+def direction(radius, crowding) {
+	mux (distanceTo(crowding == atRisk()) < radius) {
+		vectorFrom(crowding == overcrowded())
+	} else {
+		noAdvice()
+	}
+}
+
+def warning(radius, crowding) {
+	distanceTo(crowding == atRisk()) < radius && crowding != overcrowded()
+}
+
+/*********** monitoring functions ***********/
+
+def somewhere(formula){
+    let netDiameter = env.get("netDiameter");
+    let speed = env.get("infoSpeed");
+    bisGradient(formula, env.get("range"), speed)  < netDiameter
+}
+
+def roundsince(cond) {
+    rep (x <- 0) { mux (cond) { 0 } else { x + 1 } }
+}
+
+/********** SLCS (spatial logic for closure space) mappings to FC *******/
+
+def interior(f){ // square: true at points with all nbrs satisfying f
+    all(nbr(f))
+}
+
+def closure(f){ // diamond: true at points with some nbrs satisfying f
+	any(nbr(f))
+}
+
+def reaches(f1,f2) { // R: true at starting points of paths whose ending point satisfies f2 and where f1 holds
+	if(f1){ somewhere(f2) } else { false }
+}
+
+def surroundedBy(f1,f2){ // U: true at points in an area satisfying f1 whose neighbours satisfy f2
+    // Maybe also as: !reaches(f1, closure(!f1 && !f2))
+	f1 && interior(!reaches(!f2,!f1))
+}
+
+def implies(f1,f2) {
+	f1 <= f2
+}
+
+env.put("run", 1); // count number of devices running this program
+
+let dangerousMolName = env.get("dangerousMolName");
+let safeMolName = env.get("safeMolName");
+
+/* CROWD ESTIMATION
+ * In FOCAS:
+ * p = 0.1; range = 15 // 30; wRange = 30 // 100; commRange = n.a.; avgThreshold = 2.17 people / m²;
+ * sumThreshold = 300 people; maxDensity = 1.08 people / m²; timeFrame = 60; w = 0.25 (fraction of walkable space in the local urban environment) */
+//countNearby(1000)
+//densityEstimation(0.005, 60, 0.25)
+//dangerousDensity(0.005, 30, 2.17, 300, 0.25)
+let p = 0.005;   let crowdRange = 30;    let w = 0.25;    let crowdedDensity = 1.08;    let dangerousThreshold = 2.17;
+let groupSize = 300; let timeFrame = 60;
+let crowding = crowdTracking(p, crowdRange, w, crowdedDensity, dangerousThreshold, groupSize, timeFrame) // overcrowded(), atRisk(), or none()
+env.put("crowding", crowding); env.put("crowdingInt", crowding.toInt());
+env.put("risk", crowding == atRisk()); env.put("overcrowded", crowding == overcrowded());
+
+// WARNING WHEN PROXIMATE TO DEVICES AT RISK (i.e., to DEVICES NEAR TO OVERCROWDED AREAS)
+let proximityToCrowdForWarning = 100;
+let isWarning = warning(proximityToCrowdForWarning, crowding);
+env.put("warning", isWarning);
+
+// SAFE PLACES AND DEVICE ROLES
+let delay = 30;
+let role = env.get("role");
+let isHuman = role == 0; let isAccessPoint = role == 1; let isSafePlace = role == 2;
+env.put(safeMolName, isSafePlace);
+
+let id = self.getDeviceUID().toString(); // getDeviceUID() returns an object of type DeviceUID
+let idInt = parseInt(id);
+env.put("uid", id);
+
+// let source =  id == "1489"; // env.has("source") || getUID() == "5" && timeSinceStart() <= 50;
+// env.put("distToSrc", gradient(source, 0, nbrRange, identity).get(0)); // gradient() returns a tuple [distance, accumulated value]
+
+let range = env.get("range")
+
+let dangerous = crowding == overcrowded() || crowding == atRisk();
+env.put(dangerousMolName, dangerous);
+
+// env.put("reachesSafety", reaches(!dangerous, isSafePlace));
+// env.put("distToSafety", bisGradient(isSafePlace, env.get("range"), env.get("infoSpeed")));
+
+let monitored = dangerous; // env.get("nodeMonitoringPredicate")(idInt);
+env.put("monitored", monitored);
+let monitoring = implies(dangerous, surroundedBy(dangerous, reaches(!dangerous, isSafePlace)));
+
+if(env.has("monitoringOracle")) { env.remove("monitoringOracle"); } else { false }
+if(env.has("monitoring")) { env.remove("monitoring"); } else { false }
+if(env.has("monitoringDifference")) { env.remove("monitoringDifference"); } else { false }
+
+if(monitored){
+    let monitoringOracle = monitoringPropertySatisfied(self.getEnvironmentAccess(), idInt);
+    env.put("monitoringOracle", monitoringOracle);
+    env.put("monitoring", monitoring);
+
+    let monitoringDifference = monitoring != monitoringOracle;
+    env.put("monitoringDifference", monitoringDifference);
+
+    monitoring
+} else { true }
+
+// bisGradient(source, range, 0.5)

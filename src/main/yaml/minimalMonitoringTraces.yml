@@ -1,0 +1,139 @@
+variables:
+  random: &random
+    min: 0
+    max: 1
+    step: 1
+    default: 0
+  range: &range
+    formula: 50
+    language: scala
+  dangerousMolName: &dangerousMolName
+    formula: "\"warning\""
+  safeMolName: &safeMolName
+    formula: "\"isSafePlace\""
+export:
+- time
+- molecule: monitoring
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: monitoringOracle
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: monitoringOracle1
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: monitoringDifference
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: monitoringDifferenceWithDelay
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: run # nodes that have run the program
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: monitored # number of nodes that are monitored
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: risk # nodes at risk
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: overcrowded # nodes in overcrowded areas
+  aggregators: [sum]
+  value-filter: onlyfinite
+- molecule: warning # nodes nearby risk nodes should be warned
+  aggregators: [sum]
+  value-filter: onlyfinite
+
+seeds:
+  scenario: *random
+  simulation: *random
+
+incarnation: protelis
+
+environment:
+  type: Continuous2DEnvironment
+  parameters: []
+
+network-model:
+  type: ConnectWithinDistance
+  parameters: [*range]
+
+layers:
+  - type: UniformLayer
+    molecule: dangerousMolName
+    parameters: [*dangerousMolName]
+  - type: UniformLayer
+    molecule: safeMolName
+    parameters: [*safeMolName]
+
+pools:
+- pool: &program
+  - time-distribution: 1
+    type: Event
+    actions:
+    - type: RunProtelisProgram
+      parameters: ["minimalMonitoringTraces", 100]
+  - program: send
+
+displacements:
+# PEOPLE
+- in:
+    type: Rectangle
+    parameters: [250, 100, 0, 520, 300]
+  programs:
+  - *program
+  contents:
+  - molecule: dangerous
+    concentration: 0
+  - molecule: safe
+    concentration: 0
+  - molecule: range
+    concentration: *range
+- in:
+    type: Rectangle
+    parameters: [120, 600, 0, 200, 300]
+  programs:
+  - *program
+  contents:
+  - molecule: dangerous
+    concentration: 1
+  - molecule: safe
+    concentration: 0
+  - molecule: range
+    concentration: *range
+- in:
+    type: Rectangle
+    parameters: [10, 300, 120, 50, 50]
+  programs:
+  - *program
+  contents:
+  - molecule: dangerous
+    concentration: 1
+  - molecule: safe
+    concentration: 0
+  - molecule: range
+    concentration: *range
+- in:
+    type: Rectangle
+    parameters: [50, 0, 0, 100, 300]
+  programs:
+  - *program
+  contents:
+  - molecule: dangerous
+    concentration: 0
+  - molecule: safe
+    concentration: 1
+  - molecule: range
+    concentration: *range
+- in:
+    type: Rectangle
+    parameters: [150, 800, 0, 300, 300]
+  programs:
+  - *program
+  contents:
+  - molecule: dangerous
+    concentration: 0
+  - molecule: safe
+    concentration: 0
+  - molecule: range
+    concentration: *range

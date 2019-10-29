@@ -1,0 +1,134 @@
+variables:
+  random: &random
+    min: 0
+    max: 1
+    step: 1
+    default: 0
+  moveFrequency: &moveFrequency
+    min: 0.01
+    max: 0.3
+    step: 0.1
+    default: 0.1
+  connectionType: &connectionType
+    formula: "\"CustomConnectViaAccessPoint\""
+    language: kotlin
+  range: &range
+    min: 100.0
+    max: 150
+    step: 50.0
+    default: 5.0
+  accessPointRange: &accessPointRange
+    min: 500.0
+    max: 600
+    step: 100.0
+    default: 20.0
+  peopleCount: &peopleCount
+    formula: 10
+    #language: scala
+  accessPointCount: &accessPointCount
+    #formula: 2000
+    min: 3000
+    max: 10000
+    step: 2000
+    default: 2
+  firingFrequency: &firingFrequency
+    min: 0.1
+    max: 0.3
+    step: 0.15
+    default: 0.25
+  infoSpeedK: &infoSpeedK
+    min: 0.2
+    max: 1.0
+    step: 0.15
+    default: 0.35
+  accessPointName: &accessPointMoleculeName
+    formula: "\"accessPoint\""
+  rangeId: &rangeId
+    formula: "\"range\""
+  roleId: &roleId
+    formula: "\"role\""
+  dangerousMolName: &dangerousMolName
+    formula: "\"dangerous\""
+  safeMolName: &safeMolName
+    formula: "\"isSafePlace\""
+
+export:
+  - time
+
+seeds:
+  scenario: *random
+  simulation: *random
+
+incarnation: protelis
+
+network-model:
+  type: *connectionType
+  parameters: [*range, *accessPointRange, *accessPointMoleculeName]
+
+pools:
+- pool: &program
+  - time-distribution: *firingFrequency
+    type: Event
+    actions:
+    - type: RunProtelisProgram
+      parameters: ["checkGraph"]
+  - program: send
+#- pool: &moveWithTraces
+#  - time-distribution: *moveFrequency
+#    type: Event
+#    actions:
+#    - *ReproduceGPSTraceOnStreets # *ReproduceGPSTrace
+- pool: &move
+  - time-distribution: *moveFrequency
+    type: Event
+    conditions:
+      - type: MoleculeHasConcentration
+        parameters: [following, true]
+    actions:
+      #- type: TargetWalker
+      #  parameters: [goto, none]
+      - type: MoveToTarget
+        parameters: [goto, 1]
+layers:
+  - type: UniformLayer
+    molecule: dangerousMolName
+    parameters: [*dangerousMolName]
+  - type: UniformLayer
+    molecule: safeMolName
+    parameters: [*safeMolName]
+
+displacements:
+  # ACCESS POINTS
+  - in:
+      #type: Rectangle
+      #parameters: [*peopleCount, -10, -10, 10, 10]
+      type: Grid
+      parameters: [-10,-10,10,10,5,5,0.1,0.1,0.1,0.1]
+    programs:
+      - *program
+      - *move
+    contents:
+      - molecule: *rangeId
+        concentration: *range
+      - molecule: *roleId
+        concentration: 0
+      - molecule: *accessPointMoleculeName
+        concentration: 0
+      - molecule: following
+        concentration: true
+  # APs
+  - in:
+      type: SpecificPositions #hospitals
+      parameters: [[-2,-4],
+                   [4,4]]
+    programs:
+      - *program
+    contents:
+    - molecule: *rangeId
+      concentration: *range
+    - molecule: *accessPointMoleculeName
+      concentration: 1.0
+    - molecule: *roleId
+      concentration: 1
+    - molecule: follows-advice
+      concentration: self.nextRandomDouble()
