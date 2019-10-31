@@ -158,23 +158,7 @@ fun makeTest(
         }
     }*/
 }
-makeTest(name="params", file = "monitoringTraces", time = 100.0, vars = setOf("netDiameter","infoSpeedK"), taskSize = 2800)
-makeTest(name="infoSpeed", file = "monitoringTraces", time = 250.0, vars = setOf("infoSpeed"), taskSize = 2800)
-makeTest(name="forRandoms", file = "monitoringTraces", time = 300.0, vars = setOf("random"), taskSize = 2800)
-makeTest(name="move", file = "monitoringTraces", time = 150.0, vars = setOf("moveFrequency","infoSpeed"), threads = 1)
-makeTest(name="nd", file = "monitoringTraces", time = 200.0, vars = setOf("netDiameter","infoSpeed"), taskSize = 2500)
-makeTest(name="work", file = "monitoringTraces", time = 150.0, vars = setOf("moveFrequency","random", "infoSpeed"), taskSize = 2500)
-makeTest(name="dyn", file = "monitoringTraces", time = 200.0, vars = setOf("moveFrequency","firingFrequency"), taskSize = 2500)
-makeTest(name="sim", file = "monitoringTraces", time = 300.0, vars = setOf("random"), taskSize = 8000)
-makeTest(name="ddsim", file = "monitoringAndDispersal", time = 500.0, vars = setOf("random"), taskSize = 8000)
-makeTest(name="aps", file = "monitoringAndDispersalWithAPs", time = 500.0, vars = setOf("random","range","netDiameter","accessPointRange","infoSpeed","apStep"), taskSize = 8000)
-makeTest(name="ok", file = "monitoringAndDispersalWithAPs", time = 250.0, vars = setOf("netDiameter"), taskSize = 8000)
-makeTest(name="follows", file = "monitoringAndDispersal", time = 500.0, vars = setOf("pFollows","random"), taskSize = 8000)
-makeTest(name="scenario", file = "monitoringAndDispersalWithAPs", time = 500.0, vars = setOf("random"), taskSize = 8000)
-makeTest(name="apf", file = "monitoringAndDispersalWithAPs", time = 500.0, vars = setOf("pFollows"), taskSize = 8000)
-makeTest(name="mad", file = "monitoringAndDispersal", time = 500.0, vars = setOf("random","gradientToUse","pFollows"), taskSize = 8000)
-makeTest(name="ohcomeon", file = "monitoringAndDispersalWithAPs", time = 500.0, vars = setOf("pFollows","gradientToUse","random"), taskSize = 3000)
-makeTest(name="meo", file = "monitoringAndDispersalWithAPs", time = 1000.0, vars = setOf("random"), taskSize = 4200)
 
+makeTest(name="paper-experiments", file = "monitoringAndDispersalWithAPs", time = 1000.0, vars = setOf("random"), taskSize = 4200)
 
 defaultTasks("shadowJar") // "fatJar"

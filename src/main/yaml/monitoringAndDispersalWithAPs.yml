@@ -1,7 +1,7 @@
 variables:
   random: &random
-    min: 10
-    max: 49
+    min: 0
+    max: 99
     step: 1
     default: 1
   optimise: &optimise

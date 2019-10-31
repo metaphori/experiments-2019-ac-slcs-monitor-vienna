@@ -24,14 +24,15 @@ from collections import defaultdict
 import ruamel.yaml as yaml
 from textwrap import wrap
 #import copy  # copy.deepcopy(myDict)
+#import fnmatch # for fnmatch.fnmatch(str,glob)
 
 #################################################################################
 ############################## Script functions #################################
 #################################################################################
 
 # returns: list of full paths of files (under directory `basedir`) filtered through a file prefix (`basefn`)
-def get_data_files(basedir, basefn):
-  return [join(basedir,p) for p in listdir(basedir) if isfile(join(basedir,p)) and p.startswith(basefn)]
+def get_data_files(basedir, fileregex):
+  return [join(basedir,p) for p in listdir(basedir) if isfile(join(basedir,p)) and re.match(fileregex,p)]
 
 def remove_tuple_item_at_index(tpl,i):
   return tpl[0:i]+tpl[(i+1):len(tpl)]
@@ -187,19 +188,20 @@ title_prefix = ""
 
 script = sys.argv[0]
 if len(sys.argv)<3:
-  print("USAGE: plotter2 <basedir> <basefn> <plotConfigFile>")
+  print("USAGE: plotter2 <plotConfig> <basedir> <fileregex> <basefn>")
   exit(0)
 
-basedir = sys.argv[1]
-basefn = sys.argv[2]
-plotconfig = sys.argv[3]
+plotconfig = sys.argv[1]
+basedir = sys.argv[2]
+fileregex = sys.argv[3]
+basefn = sys.argv[4]
 outdir = os.path.join(basedir, "imgs/")
 if not os.path.exists(outdir):
   os.makedirs(outdir)
   
-files = get_data_files(basedir,basefn)
+files = get_data_files(basedir,fileregex)
 
-print("Executing script: basedir=" + basedir + "\t basefilename=" + basefn)
+print("Executing script: basedir=" + basedir + "\t fileregex=" + fileregex)
 print("Files to be processed: " + str(files))
 print("Output directory for graphs: " + str(outdir))
 print("Loading plot configurartion: " + str(plotconfig))
