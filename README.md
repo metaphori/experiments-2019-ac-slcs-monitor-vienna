@@ -14,7 +14,8 @@ The project has the standard structure of Maven/Gradle projects.
 
 ## Reproducing the experiments: how-to
 
-NOTE: this may take a few hours.
+- NOTE: this may take several hours.
+- NOTE: the launcher should be able to adjust the number of parallel instances based on you available RAM (for issues, look at `build.gradle.kts`)
 
 The simulations used to produce the results shown in the paper can be run with the following command:
 
@@ -29,6 +30,8 @@ Once data files (which are in CSV format) are generated in directory `data/`, yo
 # ./plotter.py <plotConfigFile> <dir> <baseFilepathRegex> <baseFilename>
 $ ./plotter.py plot.yml data .*paper-experiments.* results
 ```
+
+NOTE: make sure to run the plotter using **Python 2.7.x**.
 
 ## Pictures in the paper
 
